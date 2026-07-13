@@ -1,0 +1,6 @@
+{
+  "name": "RetroCam AI",
+  "description": "A premium Vintage Instant Camera Experience App with real-time capture, tactile analog controls, polaroid development animations, and AI-powered scene enhancement.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
