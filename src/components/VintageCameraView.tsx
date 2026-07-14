@@ -85,6 +85,22 @@ export default function VintageCameraView({
     return () => stopCamera();
   }, [facingMode]);
 
+  // Handle stream binding once the video element is mounted and rendered in the DOM
+  useEffect(() => {
+    if (hasCamera && videoRef.current && streamRef.current) {
+      try {
+        if (videoRef.current.srcObject !== streamRef.current) {
+          videoRef.current.srcObject = streamRef.current;
+          videoRef.current.play().catch((e) => {
+            console.warn("Failed to autoplay video stream on mount:", e);
+          });
+        }
+      } catch (err) {
+        console.error("Error setting video source object:", err);
+      }
+    }
+  }, [hasCamera, videoRef.current, streamRef.current]);
+
   const startCamera = async () => {
     setCameraLoading(true);
     stopCamera();
@@ -100,17 +116,38 @@ export default function VintageCameraView({
         audio: false
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (firstErr) {
+        console.warn("First camera constraints failed, trying more permissive ones...", firstErr);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode },
+            audio: false
+          });
+        } catch (secondErr) {
+          console.warn("Second camera constraints failed, trying ultimate fallback...", secondErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
       }
+
+      streamRef.current = stream;
       setHasCamera(true);
       setCameraLoading(false);
       setStatusLog("Sensors linked. Glass optics clear.");
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch((e) => {
+          console.warn("Play error in startCamera:", e);
+        });
+      }
     } catch (err) {
-      console.warn("Camera access denied or unavailable inside iframe sandbox. Starting Vintage Emulator...");
+      console.warn("Camera access denied or completely unavailable on this system:", err);
       setHasCamera(false);
       setCameraLoading(false);
       startFallbackSimulator();

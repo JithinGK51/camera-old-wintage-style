@@ -110,6 +110,27 @@ function getFallbackMetadata(frameStyle?: string) {
   return classicFallbacks[Math.floor(Math.random() * classicFallbacks.length)];
 }
 
+// Retries a function with exponential backoff for transient API errors (like 503 and 429)
+async function generateContentWithRetry(ai: any, params: any, retries = 2, delayMs = 1000): Promise<any> {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (error: any) {
+      const status = error?.status || error?.statusCode || 0;
+      const msg = (error?.message || "").toLowerCase();
+      const isTransient = status === 503 || status === 429 || msg.includes("503") || msg.includes("429") || msg.includes("temporary") || msg.includes("demand") || msg.includes("unavailable");
+      
+      if (isTransient && attempt <= retries) {
+        const backoff = delayMs * Math.pow(2, attempt - 1);
+        console.warn(`Gemini API transient error (attempt ${attempt}/${retries + 1}). Retrying in ${backoff}ms...`, error.message || error);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -162,7 +183,7 @@ async function startServer() {
         text: promptText,
       };
 
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: "gemini-3.5-flash",
         contents: [imagePart, promptPart],
         config: {
